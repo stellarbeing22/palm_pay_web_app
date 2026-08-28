@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import "./styles.css";
 
-const RPI_API = "https://court-brighton-orbit-measure.trycloudflare.com";
+const RPI_API = "https://fishtank.taile121fd.ts.net";
 
 export default function Home() {
   const [name, setName] = useState("");
