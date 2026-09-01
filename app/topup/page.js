@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import "../styles.css";
 
-const RPI_API = "https://fishtank.taile121fd.ts.net";
+const DEFAULT_RPI_API = "https://fishtank.taile121fd.ts.net";
+
 const PRESET_AMOUNTS = [100, 200, 500, 1000];
 
 export default function TopUp() {
@@ -15,6 +16,18 @@ export default function TopUp() {
   const [paying, setPaying] = useState(false);
   const [result, setResult] = useState(null); // null | "success" | "error"
   const [newBalance, setNewBalance] = useState(null);
+  const [rpiApi, setRpiApi] = useState(DEFAULT_RPI_API);
+
+  // Read dynamic backend API URL from query parameter (?api=https://...)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const apiParam = params.get("api");
+      if (apiParam) {
+        setRpiApi(apiParam);
+      }
+    }
+  }, []);
 
   // Load Razorpay Checkout script once on mount.
   useEffect(() => {
@@ -45,7 +58,7 @@ export default function TopUp() {
     setStatus("Creating order...");
 
     try {
-      const createRes = await fetch(`${RPI_API}/api/wallet/topup/create`, {
+      const createRes = await fetch(`${rpiApi}/api/wallet/topup/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -76,7 +89,7 @@ export default function TopUp() {
         handler: async function (response) {
           setStatus("Verifying payment...");
           try {
-            const verifyRes = await fetch(`${RPI_API}/api/wallet/topup/verify`, {
+            const verifyRes = await fetch(`${rpiApi}/api/wallet/topup/verify`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
