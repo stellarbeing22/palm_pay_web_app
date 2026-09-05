@@ -5,14 +5,22 @@ import "./styles.css";
 
 const DEFAULT_RPI_API = "https://fishtank.taile121fd.ts.net";
 
+function normalizeMobile(raw) {
+  let digits = (raw || "").replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2);
+  else if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
+  return digits;
+}
+
 export default function Home() {
   const [name, setName] = useState("");
-  const [userId, setUserId] = useState("");
+  const [mobile, setMobile] = useState("");
   const [started, setStarted] = useState(false);
   const [status, setStatus] = useState("Connecting...");
   const [shots, setShots] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+  const [checking, setChecking] = useState(false);
   const [rpiApi, setRpiApi] = useState(DEFAULT_RPI_API);
 
   // Read dynamic backend API URL from query parameter (?api=https://...)
@@ -26,37 +34,55 @@ export default function Home() {
     }
   }, []);
 
-  async function startEnrollment(e) {
+  const mobileDigits = normalizeMobile(mobile);
+  const mobileValid = mobileDigits.length === 10;
+
+  async function handleContinue(e) {
     e.preventDefault();
 
-    if (!name.trim() || !userId.trim()) return;
+    if (!mobileValid) return;
 
     setError("");
-    setStatus("Connecting to PalmPay...");
+    setChecking(true);
+    setStatus("Checking your number...");
 
     try {
-      const response = await fetch(`${rpiApi}/api/enroll`, {
+      const response = await fetch(`${rpiApi}/api/account/start`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           name: name.trim(),
-          user_id: userId.trim(),
+          mobile: mobileDigits,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || "Enrollment could not be started");
+        throw new Error(data.error || "Could not continue");
       }
 
+      if (data.enrolled) {
+        // Already have a palm template on file -- straight to top-up,
+        // no need to involve the PalmPay device at all.
+        const params = new URLSearchParams({
+          mobile: mobileDigits,
+          api: rpiApi,
+        });
+        window.location.href = `/topup?${params.toString()}`;
+        return;
+      }
+
+      // New number -- the device is now waiting for a palm capture.
       setStarted(true);
       setStatus("Place your palm in front of the scanner");
     } catch (err) {
       setError(err.message);
       setStatus("Could not connect to PalmPay");
+    } finally {
+      setChecking(false);
     }
   }
 
@@ -65,7 +91,7 @@ export default function Home() {
 
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(`${rpiApi}/api/enroll/status`);
+        const response = await fetch(`${rpiApi}/api/account/status`);
 
         if (!response.ok) {
           throw new Error("Status request failed");
@@ -108,43 +134,47 @@ export default function Home() {
           <div className="logo">P</div>
           <div>
             <h1>PalmPay</h1>
-            <p>Palm-vein biometric enrollment</p>
+            <p>Palm-vein biometric payments</p>
           </div>
         </div>
 
         {!started && !result ? (
           <>
             <div className="heading">
-              <h2>Enroll new user</h2>
-              <p>Enter your details to begin enrollment.</p>
+              <h2>My account</h2>
+              <p>
+                Enter your mobile number. New numbers start enrollment,
+                existing numbers go straight to top-up.
+              </p>
             </div>
 
-            <form onSubmit={startEnrollment}>
+            <form onSubmit={handleContinue}>
+              <label>
+                Mobile number
+                <input
+                  value={mobile}
+                  onChange={(e) => setMobile(e.target.value)}
+                  placeholder="10-digit mobile number"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  maxLength={16}
+                  disabled={checking}
+                />
+              </label>
+
               <label>
                 Name
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter full name"
+                  placeholder="Only needed for new numbers"
                   autoComplete="name"
+                  disabled={checking}
                 />
               </label>
 
-              <label>
-                User ID
-                <input
-                  value={userId}
-                  onChange={(e) => setUserId(e.target.value)}
-                  placeholder="Enter user ID"
-                  autoComplete="off"
-                />
-              </label>
-
-              <button
-                type="submit"
-                disabled={!name.trim() || !userId.trim()}
-              >
-                Start enrollment
+              <button type="submit" disabled={!mobileValid || checking}>
+                {checking ? status || "Checking..." : "Continue"}
               </button>
             </form>
 
@@ -162,7 +192,7 @@ export default function Home() {
               <strong>{name}</strong> has been enrolled successfully.
             </p>
 
-            <p>User ID: {userId}</p>
+            <p>Mobile: {mobileDigits}</p>
 
             <button onClick={() => window.location.reload()}>
               Enroll another user
@@ -187,7 +217,7 @@ export default function Home() {
             <p>
               Enrollment started for <strong>{name}</strong>.
               <br />
-              User ID: <strong>{userId}</strong>
+              Mobile: <strong>{mobileDigits}</strong>
             </p>
 
             <div className="status">
