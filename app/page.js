@@ -194,8 +194,16 @@ export default function Home() {
 
             <p>Mobile: {mobileDigits}</p>
 
-            <button onClick={() => window.location.reload()}>
-              Enroll another user
+            <button
+              onClick={() => {
+                const params = new URLSearchParams({
+                  mobile: mobileDigits,
+                  api: rpiApi,
+                });
+                window.location.href = `/topup?${params.toString()}`;
+              }}
+            >
+              Top up wallet
             </button>
           </div>
         ) : result === "error" ? (
